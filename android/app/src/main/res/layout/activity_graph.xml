@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_background">
+
+    <!-- Header -->
+    <LinearLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/surface_dark"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:elevation="4dp">
+
+        <!-- Back Button -->
+        <ImageButton
+            android:id="@+id/backButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_back"
+            android:contentDescription="назад"
+            android:padding="8dp" />
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="knowledge graph"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginStart="16dp" />
+
+        <!-- Add Node -->
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_add"
+            android:tint="@color/neon_green"
+            android:contentDescription="добавить узел"
+            android:padding="8dp" />
+
+    </LinearLayout>
+
+    <!-- Graph View -->
+    <view
+        class="com.redeluxe.GraphActivity$GraphView"
+        android:id="@+id/graphView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/headerLayout"
+        android:background="@color/dark_background" />
+
+    <!-- Controls -->
+    <LinearLayout
+        android:id="@+id/controlsLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:gravity="end">
+
+        <!-- Zoom In -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/zoomInButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:src="@drawable/ic_zoom_in"
+            app:backgroundTint="@color/surface_dark"
+            app:fabSize="mini"
+            app:elevation="6dp" />
+
+        <!-- Zoom Out -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/zoomOutButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:src="@drawable/ic_zoom_out"
+            app:backgroundTint="@color/surface_dark"
+            app:fabSize="mini"
+            app:elevation="6dp" />
+
+        <!-- Center -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/centerButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_center"
+            app:backgroundTint="@color/surface_dark"
+            app:fabSize="mini"
+            app:elevation="6dp" />
+
+    </LinearLayout>
+
+    <!-- Legend -->
+    <LinearLayout
+        android:id="@+id/legendLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="true"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:background="@color/surface_dark"
+        android:padding="12dp"
+        android:alpha="0.9">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="легенда"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Note -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@color/neon_cyan"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="заметки"
+                android:textColor="@color/text_secondary"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+
+        </LinearLayout>
+
+        <!-- Category -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@color/neon_pink"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="категории"
+                android:textColor="@color/text_secondary"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+
+        </LinearLayout>
+
+        <!-- Tag -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@color/neon_green"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="теги"
+                android:textColor="@color/text_secondary"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout> 

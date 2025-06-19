@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">redeluxe</string>
+    <string name="login">войти</string>
+    <string name="register">зарегистрироваться</string>
+    <string name="email">email</string>
+    <string name="password">пароль</string>
+    <string name="username">имя пользователя</string>
+    <string name="title">заголовок</string>
+    <string name="content">содержимое</string>
+    <string name="save">сохранить</string>
+    <string name="delete">удалить</string>
+    <string name="new_note">новая заметка</string>
+    <string name="edit_note">редактировать заметку</string>
+    <string name="no_notes">пока нет заметок</string>
+    <string name="create_first_note">создайте первую заметку</string>
+    <string name="search">поиск</string>
+    <string name="logout">выйти</string>
+</resources> 

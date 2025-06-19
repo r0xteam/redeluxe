@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    
+    <!-- фон -->
+    <path
+        android:pathData="M0,0 L120,0 L120,120 L0,120 Z"
+        android:fillColor="#7c3aed" />
+    
+    <!-- основная форма заметки -->
+    <path
+        android:pathData="M20,25 L100,25 L100,95 L20,95 Z"
+        android:fillColor="#ffffff"
+        android:fillAlpha="0.9" />
+    
+    <!-- линии текста -->
+    <path
+        android:pathData="M30,40 L90,40"
+        android:strokeColor="#7c3aed"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    
+    <path
+        android:pathData="M30,50 L75,50"
+        android:strokeColor="#7c3aed"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    
+    <path
+        android:pathData="M30,60 L85,60"
+        android:strokeColor="#7c3aed"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    
+    <path
+        android:pathData="M30,70 L70,70"
+        android:strokeColor="#7c3aed"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+    
+    <!-- декоративный элемент -->
+    <path
+        android:pathData="M85,72 A8,8 0 1,1 85,88 A8,8 0 1,1 85,72 Z"
+        android:fillColor="#a855f7" />
+        
+</vector> 

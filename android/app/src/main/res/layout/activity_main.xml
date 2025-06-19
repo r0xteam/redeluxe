@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_background">
+
+    <!-- Top Action Bar -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/surface_dark"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:elevation="4dp">
+
+        <!-- Logo -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="◢ redeluxe"
+            android:textColor="@color/neon_cyan"
+            android:textSize="18sp"
+            android:fontFamily="monospace"
+            android:textStyle="bold" />
+
+        <!-- Search -->
+        <EditText
+            android:id="@+id/searchInput"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="16dp"
+            android:background="@drawable/input_background"
+            android:hint="поиск заметок..."
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_hint"
+            android:textSize="14sp"
+            android:paddingHorizontal="12dp"
+            android:imeOptions="actionSearch"
+            android:singleLine="true" />
+
+        <!-- Quick Stats -->
+        <TextView
+            android:id="@+id/notesCountText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0"
+            android:textColor="@color/neon_pink"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:background="@color/accent_dark"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- Menu -->
+        <ImageButton
+            android:id="@+id/menuButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="меню"
+            android:padding="8dp" />
+
+    </LinearLayout>
+
+    <!-- Filter Chips -->
+    <HorizontalScrollView
+        android:id="@+id/filterChipsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="56dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:scrollbars="none"
+        android:background="@color/surface_dark">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="все"
+                android:checked="true"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_cyan"
+                app:chipStrokeColor="@color/neon_cyan" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipPinned"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📌 закрепленные"
+                android:layout_marginStart="8dp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_pink"
+                app:chipStrokeColor="@color/neon_pink" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipArchived"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📦 архив"
+                android:layout_marginStart="8dp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_orange"
+                app:chipStrokeColor="@color/neon_orange" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipCategories"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📁 категории"
+                android:layout_marginStart="8dp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_green"
+                app:chipStrokeColor="@color/neon_green" />
+
+        </LinearLayout>
+
+    </HorizontalScrollView>
+
+    <!-- Main Content -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/notesRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="112dp"
+            android:padding="8dp"
+        android:clipToPadding="false"
+        android:scrollbars="none" />
+
+    <!-- Empty State -->
+    <LinearLayout
+        android:id="@+id/emptyState"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="◇"
+            android:textSize="64sp"
+            android:textColor="@color/text_hint"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="нет заметок"
+            android:textColor="@color/text_hint"
+            android:textSize="16sp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="нажмите + чтобы создать"
+            android:textColor="@color/text_hint"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+    <!-- Floating Action Menu -->
+    <LinearLayout
+        android:id="@+id/fabMenu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:gravity="end">
+
+        <!-- Graph View FAB -->
+        <LinearLayout
+            android:id="@+id/fabGraphContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            android:alpha="0">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="◈ graph view"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:fontFamily="monospace"
+                android:background="@color/surface_dark"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:layout_marginEnd="12dp"
+                android:elevation="4dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabGraph"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_graph"
+                app:backgroundTint="@color/surface_dark"
+                app:tint="@color/neon_cyan"
+                app:fabSize="mini"
+                app:elevation="6dp" />
+
+        </LinearLayout>
+
+        <!-- Canvas FAB -->
+        <LinearLayout
+            android:id="@+id/fabCanvasContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            android:alpha="0">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="◉ canvas"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:fontFamily="monospace"
+                android:background="@color/surface_dark"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:layout_marginEnd="12dp"
+                android:elevation="4dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabCanvas"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_canvas"
+                app:backgroundTint="@color/surface_dark"
+                app:tint="@color/neon_pink"
+                app:fabSize="mini"
+                app:elevation="6dp" />
+
+        </LinearLayout>
+
+        <!-- Daily Note FAB -->
+        <LinearLayout
+            android:id="@+id/fabDailyContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            android:alpha="0">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📅 daily note"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:fontFamily="monospace"
+                android:background="@color/surface_dark"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:layout_marginEnd="12dp"
+                android:elevation="4dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabDaily"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_save"
+                app:backgroundTint="@color/neon_green"
+                app:tint="@color/black"
+                app:fabSize="mini" />
+
+        </LinearLayout>
+
+        <!-- Template FAB -->
+        <LinearLayout
+            android:id="@+id/fabTemplateContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            android:alpha="0">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📋 шаблоны"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:fontFamily="monospace"
+                android:background="@color/surface_dark"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:layout_marginEnd="12dp"
+                android:elevation="4dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabTemplate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+        android:src="@drawable/ic_add"
+                android:rotation="45"
+                app:backgroundTint="@color/neon_orange"
+                app:tint="@color/black"
+                app:fabSize="mini" />
+
+        </LinearLayout>
+
+        <!-- Main FAB -->
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/addNoteFab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="новая заметка"
+            android:textColor="@color/black"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            app:backgroundTint="@color/neon_cyan"
+            app:elevation="8dp"
+            app:icon="@drawable/ic_add"
+            app:iconTint="@color/black" />
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout> 
