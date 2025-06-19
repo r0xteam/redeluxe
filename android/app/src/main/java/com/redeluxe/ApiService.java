@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -11,10 +13,13 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ApiService {
     private static final String BASE_URL = "http://85.234.110.4:3000/api"; // для эмулятора
@@ -216,6 +221,129 @@ public class ApiService {
         executeRequest("GET", "/stats", null, callback, true);
     }
 
+    // canvas
+    public void getCanvases(ApiCallback<String> callback) {
+        executeRequest("GET", "/canvases", null, callback, true);
+    }
+
+    public void createCanvas(String name, int width, int height, ApiCallback<String> callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("name", name);
+            json.put("width", width);
+            json.put("height", height);
+            executeRequest("POST", "/canvases", json.toString(), callback, true);
+        } catch (JSONException e) {
+            callback.onError("ошибка создания canvas");
+        }
+    }
+
+    public void getCanvas(int canvasId, ApiCallback<String> callback) {
+        executeRequest("GET", "/canvases/" + canvasId, null, callback, true);
+    }
+
+    public void saveCanvasState(int canvasId, double zoom, double panX, double panY, 
+                               String viewState, String data, JSONArray nodes, JSONArray connections, ApiCallback<String> callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("zoom", zoom);
+            json.put("pan_x", panX);
+            json.put("pan_y", panY);
+            json.put("view_state", viewState);
+            json.put("data", data);
+            if (nodes != null) {
+                json.put("nodes", nodes);
+            }
+            if (connections != null) {
+                json.put("connections", connections);
+            }
+            executeRequest("POST", "/canvases/" + canvasId + "/save-state", json.toString(), callback, true);
+        } catch (JSONException e) {
+            callback.onError("ошибка сохранения состояния");
+        }
+    }
+
+    public void autoSaveCanvasState(int canvasId, double zoom, double panX, double panY, 
+                                   String viewState, ApiCallback<String> callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("zoom", zoom);
+            json.put("pan_x", panX);
+            json.put("pan_y", panY);
+            json.put("view_state", viewState);
+            executeRequest("POST", "/canvases/" + canvasId + "/autosave", json.toString(), callback, true);
+        } catch (JSONException e) {
+            callback.onError("ошибка автосохранения");
+        }
+    }
+
+    public void createCanvasNode(int canvasId, String type, double x, double y, double width, 
+                                double height, String data, String style, ApiCallback<String> callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("type", type);
+            json.put("x", x);
+            json.put("y", y);
+            json.put("width", width);
+            json.put("height", height);
+            json.put("data", data);
+            json.put("style", style);
+            executeRequest("POST", "/canvases/" + canvasId + "/nodes", json.toString(), callback, true);
+        } catch (JSONException e) {
+            callback.onError("ошибка создания узла");
+        }
+    }
+
+    public void updateCanvasNode(int canvasId, int nodeId, String updateData, ApiCallback<String> callback) {
+        executeRequest("PUT", "/canvases/" + canvasId + "/nodes/" + nodeId, updateData, callback, true);
+    }
+
+    public void deleteCanvasNode(int canvasId, int nodeId, ApiCallback<String> callback) {
+        executeRequest("DELETE", "/canvases/" + canvasId + "/nodes/" + nodeId, null, callback, true);
+    }
+
+    public void deleteCanvas(int canvasId, ApiCallback<String> callback) {
+        executeRequest("DELETE", "/canvases/" + canvasId, null, callback, true);
+    }
+
+    // graph
+    public void getGraph(String filters, ApiCallback<String> callback) {
+        String url = "/graph";
+        if (filters != null && !filters.isEmpty()) {
+            url += "?" + filters;
+        }
+        executeRequest("GET", url, null, callback, true);
+    }
+
+    public void saveGraphState(String name, String data, String layout, double zoom, 
+                              double panX, double panY, String filter, ApiCallback<String> callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("name", name);
+            json.put("data", data);
+            json.put("layout", layout);
+            json.put("zoom", zoom);
+            json.put("pan_x", panX);
+            json.put("pan_y", panY);
+            json.put("filter", filter);
+            executeRequest("POST", "/graph/save-state", json.toString(), callback, true);
+        } catch (JSONException e) {
+            callback.onError("ошибка сохранения состояния графа");
+        }
+    }
+
+    public void getGraphStates(ApiCallback<String> callback) {
+        executeRequest("GET", "/graph/states", null, callback, true);
+    }
+
+    public void getGraphState(int stateId, ApiCallback<String> callback) {
+        executeRequest("GET", "/graph/states/" + stateId, null, callback, true);
+    }
+
+    public void deleteGraphState(int stateId, ApiCallback<String> callback) {
+        executeRequest("DELETE", "/graph/states/" + stateId, null, callback, true);
+    }
+
     // утилиты
     private String createAuthJson(String email, String password, String username) {
         try {
@@ -337,7 +465,8 @@ public class ApiService {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 
                 conn.setRequestMethod(method);
-                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                conn.setRequestProperty("Accept-Charset", "utf-8");
                 
                 if (needAuth && !token.isEmpty()) {
                     conn.setRequestProperty("Authorization", "Bearer " + token);
@@ -346,7 +475,7 @@ public class ApiService {
                 if (data != null && (method.equals("POST") || method.equals("PUT"))) {
                     conn.setDoOutput(true);
                     DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-                    out.writeBytes(data);
+                    out.write(data.getBytes("UTF-8"));
                     out.flush();
                     out.close();
                 }
@@ -354,7 +483,7 @@ public class ApiService {
                 int responseCode = conn.getResponseCode();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(
                     responseCode >= 200 && responseCode < 300 ? 
-                    conn.getInputStream() : conn.getErrorStream()
+                    conn.getInputStream() : conn.getErrorStream(), "UTF-8"
                 ));
 
                 StringBuilder response = new StringBuilder();
@@ -393,6 +522,10 @@ public class ApiService {
             } catch (IOException e) {
                 new Handler(Looper.getMainLooper()).post(() -> 
                     callback.onError("ошибка сети: " + e.getMessage())
+                );
+            } catch (Exception e) {
+                new Handler(Looper.getMainLooper()).post(() -> 
+                    callback.onError("ошибка кодировки: " + e.getMessage())
                 );
             }
         }).start();

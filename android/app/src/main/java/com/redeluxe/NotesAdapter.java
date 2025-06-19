@@ -17,8 +17,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.NoteViewHolder> {
-    private List<Note> notes;
+public class NotesAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+    private List<ListItem> items;
     private OnNoteActionListener listener;
 
     public interface OnNoteActionListener {
@@ -27,32 +27,63 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.NoteViewHold
         void onNoteDelete(Note note);
         void onNotePin(Note note);
         void onNoteLongClick(Note note);
+        void onCanvasClick(CanvasItem canvas);
+        void onCanvasDelete(CanvasItem canvas);
+        void onGraphClick(GraphItem graph);
+        void onGraphDelete(GraphItem graph);
     }
 
-    public NotesAdapter(List<Note> notes, OnNoteActionListener listener) {
-        this.notes = notes;
+    public NotesAdapter(List<ListItem> items, OnNoteActionListener listener) {
+        this.items = items;
         this.listener = listener;
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return items.get(position).getType();
     }
 
     @NonNull
     @Override
-    public NoteViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_note, parent, false);
-        return new NoteViewHolder(view);
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+        
+        switch (viewType) {
+            case ListItem.TYPE_CANVAS:
+                View canvasView = inflater.inflate(R.layout.item_note, parent, false);
+                return new CanvasViewHolder(canvasView);
+            case ListItem.TYPE_GRAPH:
+                View graphView = inflater.inflate(R.layout.item_note, parent, false);
+                return new GraphViewHolder(graphView);
+            default: // TYPE_NOTE
+                View noteView = inflater.inflate(R.layout.item_note, parent, false);
+                return new NoteViewHolder(noteView);
+        }
     }
 
     @Override
-    public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
-        Note note = notes.get(position);
-        holder.bind(note);
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        ListItem item = items.get(position);
+        
+        switch (item.getType()) {
+            case ListItem.TYPE_NOTE:
+                ((NoteViewHolder) holder).bind(item.getNote());
+                break;
+            case ListItem.TYPE_CANVAS:
+                ((CanvasViewHolder) holder).bind(item.getCanvas());
+                break;
+            case ListItem.TYPE_GRAPH:
+                ((GraphViewHolder) holder).bind(item.getGraph());
+                break;
+        }
     }
 
     @Override
     public int getItemCount() {
-        return notes.size();
+        return items.size();
     }
 
+    // ViewHolder для заметок
     class NoteViewHolder extends RecyclerView.ViewHolder {
         private View colorIndicator;
         private TextView titleText, contentText, dateText, categoryText;
@@ -114,7 +145,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.NoteViewHold
                 categoryText.setVisibility(View.GONE);
             }
             
-            // TODO: теги (когда добавим их в Note модель)
+            // теги скрыты пока
             tagsContainer.setVisibility(View.GONE);
             
             // обработчики
@@ -140,6 +171,140 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.NoteViewHold
             itemView.setOnLongClickListener(v -> {
                 if (listener != null) {
                     listener.onNoteLongClick(note);
+                }
+                return true;
+            });
+        }
+    }
+
+    // ViewHolder для canvas
+    class CanvasViewHolder extends RecyclerView.ViewHolder {
+        private View colorIndicator;
+        private TextView titleText, contentText, dateText, categoryText;
+        private ImageView pinIcon;
+        private ImageButton archiveButton, moreButton;
+
+        public CanvasViewHolder(@NonNull View itemView) {
+            super(itemView);
+            
+            colorIndicator = itemView.findViewById(R.id.colorIndicator);
+            titleText = itemView.findViewById(R.id.titleText);
+            contentText = itemView.findViewById(R.id.contentText);
+            dateText = itemView.findViewById(R.id.dateText);
+            categoryText = itemView.findViewById(R.id.categoryText);
+            pinIcon = itemView.findViewById(R.id.pinIcon);
+            archiveButton = itemView.findViewById(R.id.archiveButton);
+            moreButton = itemView.findViewById(R.id.moreButton);
+        }
+
+        public void bind(CanvasItem canvas) {
+            // основные данные
+            titleText.setText("🎨 " + canvas.getName());
+            contentText.setText("интерактивный canvas");
+            
+            // цвет для canvas
+            colorIndicator.setBackgroundColor(Color.parseColor("#ff8000"));
+            
+            // дата
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("dd.MM", Locale.getDefault());
+                Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+                        .parse(canvas.getUpdatedAt());
+                dateText.setText(date != null ? sdf.format(date) : "");
+            } catch (Exception e) {
+                dateText.setText("");
+            }
+            
+            // canvas не закрепляется
+            pinIcon.setVisibility(View.GONE);
+            
+            // тип элемента
+            categoryText.setText("🎨 canvas");
+            categoryText.setTextColor(Color.parseColor("#ff8000"));
+            categoryText.setVisibility(View.VISIBLE);
+            
+            // обработчики
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onCanvasClick(canvas);
+                }
+            });
+            
+            // Скрываем ненужные кнопки
+            archiveButton.setVisibility(View.GONE);
+            moreButton.setVisibility(View.GONE);
+
+            // Удаление по долгому тапу
+            itemView.setOnLongClickListener(v -> {
+                if (listener != null) {
+                    listener.onCanvasDelete(canvas);
+                }
+                return true;
+            });
+        }
+    }
+
+    // ViewHolder для графиков
+    class GraphViewHolder extends RecyclerView.ViewHolder {
+        private View colorIndicator;
+        private TextView titleText, contentText, dateText, categoryText;
+        private ImageView pinIcon;
+        private ImageButton archiveButton, moreButton;
+
+        public GraphViewHolder(@NonNull View itemView) {
+            super(itemView);
+            
+            colorIndicator = itemView.findViewById(R.id.colorIndicator);
+            titleText = itemView.findViewById(R.id.titleText);
+            contentText = itemView.findViewById(R.id.contentText);
+            dateText = itemView.findViewById(R.id.dateText);
+            categoryText = itemView.findViewById(R.id.categoryText);
+            pinIcon = itemView.findViewById(R.id.pinIcon);
+            archiveButton = itemView.findViewById(R.id.archiveButton);
+            moreButton = itemView.findViewById(R.id.moreButton);
+        }
+
+        public void bind(GraphItem graph) {
+            // основные данные
+            titleText.setText("📊 " + graph.getName());
+            contentText.setText("граф связей (" + graph.getLayout() + ")");
+            
+            // цвет для графика
+            colorIndicator.setBackgroundColor(Color.parseColor("#00ff41"));
+            
+            // дата
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("dd.MM", Locale.getDefault());
+                Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+                        .parse(graph.getUpdatedAt());
+                dateText.setText(date != null ? sdf.format(date) : "");
+            } catch (Exception e) {
+                dateText.setText("");
+            }
+            
+            // граф не закрепляется
+            pinIcon.setVisibility(View.GONE);
+            
+            // тип элемента
+            categoryText.setText("📊 граф");
+            categoryText.setTextColor(Color.parseColor("#00ff41"));
+            categoryText.setVisibility(View.VISIBLE);
+            
+            // обработчики
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onGraphClick(graph);
+                }
+            });
+            
+            // Скрываем ненужные кнопки
+            archiveButton.setVisibility(View.GONE);
+            moreButton.setVisibility(View.GONE);
+            
+            // Удаление по долгому тапу
+            itemView.setOnLongClickListener(v -> {
+                if (listener != null) {
+                    listener.onGraphDelete(graph);
                 }
                 return true;
             });

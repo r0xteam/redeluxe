@@ -20,12 +20,17 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
 public class CanvasActivity extends AppCompatActivity {
     private CanvasView canvasView;
     private ApiService apiService;
+    private int currentCanvasId = 0;
+    
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,7 +40,22 @@ public class CanvasActivity extends AppCompatActivity {
         canvasView = findViewById(R.id.canvasView);
         apiService = new ApiService(this);
 
+        // получаем ID canvas из intent
+        currentCanvasId = getIntent().getIntExtra("canvas_id", 0);
+        String canvasName = getIntent().getStringExtra("canvas_name");
+        
+        if (canvasName != null) {
+            setTitle(canvasName);
+        }
+
         setupButtons();
+        
+        if (currentCanvasId > 0) {
+            loadCanvas();
+        } else {
+            // если ID не передан, используем демо контент
+            canvasView.createDemoContent();
+        }
     }
 
     private void setupButtons() {
@@ -98,10 +118,68 @@ public class CanvasActivity extends AppCompatActivity {
             .show();
     }
 
-    private void saveCanvas() {
-        Toast.makeText(this, "canvas сохранен", Toast.LENGTH_SHORT).show();
-        // todo: save to api
+    private void loadCanvas() {
+        apiService.getCanvas(currentCanvasId, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    canvasView.loadCanvasFromJson(result);
+                } catch (Exception e) {
+                    // если canvas не найден, создаем новый
+                    createNewCanvas();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                createNewCanvas();
+            }
+        });
     }
+
+    private void createNewCanvas() {
+        apiService.createCanvas("новый canvas", 1920, 1080, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    currentCanvasId = json.getInt("id");
+                    Toast.makeText(CanvasActivity.this, "canvas создан", Toast.LENGTH_SHORT).show();
+                } catch (JSONException e) {
+                    Toast.makeText(CanvasActivity.this, "ошибка создания canvas", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(CanvasActivity.this, "ошибка: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void saveCanvas() {
+        if (canvasView != null) {
+            CanvasView.ViewportState state = canvasView.getViewportState();
+            JSONArray nodesJsonArray = canvasView.getNodesAsJsonArray();
+            JSONArray connectionsJsonArray = canvasView.getConnectionsAsJsonArray();
+            String canvasData = canvasView.getCanvasData();
+            
+            apiService.saveCanvasState(currentCanvasId, state.zoom, state.panX, state.panY, 
+                state.viewState, canvasData, nodesJsonArray, connectionsJsonArray, new ApiService.ApiCallback<String>() {
+                @Override
+                public void onSuccess(String result) {
+                    Toast.makeText(CanvasActivity.this, "canvas сохранен", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onError(String error) {
+                    Toast.makeText(CanvasActivity.this, "ошибка сохранения: " + error, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    
 
     public static class CanvasView extends View {
         private List<CanvasNode> nodes = new ArrayList<>();
@@ -626,6 +704,155 @@ public class CanvasActivity extends AppCompatActivity {
                 .show();
         }
 
+        public ViewportState getViewportState() {
+            ViewportState state = new ViewportState();
+            state.zoom = scaleFactor;
+            float[] values = new float[9];
+            matrix.getValues(values);
+            state.panX = values[Matrix.MTRANS_X];
+            state.panY = values[Matrix.MTRANS_Y];
+            state.viewState = String.format("{\"scale\":%.2f,\"translateX\":%.2f,\"translateY\":%.2f}", 
+                scaleFactor, state.panX, state.panY);
+            return state;
+        }
+
+        public JSONArray getNodesAsJsonArray() {
+            JSONArray jsonArray = new JSONArray();
+            for (CanvasNode node : nodes) {
+                try {
+                    JSONObject jsonNode = new JSONObject();
+                    jsonNode.put("type", node.type);
+                    jsonNode.put("x", (double)node.x);
+                    jsonNode.put("y", (double)node.y);
+                    jsonNode.put("width", (double)node.width);
+                    jsonNode.put("height", (double)node.height);
+                    jsonNode.put("rotation", 0.0);
+                    jsonNode.put("scale", 1.0);
+                    jsonNode.put("z_index", 0);
+                    
+                    // простые поля вместо JSON объектов
+                    jsonNode.put("title", node.title);
+                    jsonNode.put("content", node.content);
+                    jsonNode.put("color", node.color);
+                    
+                    if (node.noteId > 0) {
+                        jsonNode.put("note_id", node.noteId);
+                    }
+                    
+                    jsonArray.put(jsonNode);
+                } catch (JSONException e) {
+                    // пропустить узел при ошибке
+                }
+            }
+            return jsonArray;
+        }
+
+        public JSONArray getConnectionsAsJsonArray() {
+            JSONArray jsonArray = new JSONArray();
+            for (CanvasConnection conn : connections) {
+                try {
+                    JSONObject jsonConn = new JSONObject();
+                    // ищем индексы узлов
+                    int fromIndex = nodes.indexOf(conn.from);
+                    int toIndex = nodes.indexOf(conn.to);
+                    
+                    if (fromIndex >= 0 && toIndex >= 0) {
+                        jsonConn.put("from_node_id", fromIndex); // временно используем индекс
+                        jsonConn.put("to_node_id", toIndex);
+                        jsonConn.put("type", conn.type);
+                        jsonArray.put(jsonConn);
+                    }
+                } catch (JSONException e) {
+                    // пропустить связь при ошибке
+                }
+            }
+            return jsonArray;
+        }
+
+        public String getCanvasData() {
+            try {
+                JSONObject data = new JSONObject();
+                data.put("version", "1.0");
+                data.put("nodes_count", nodes.size());
+                data.put("connections_count", connections.size());
+                data.put("created_at", System.currentTimeMillis());
+                return data.toString();
+            } catch (JSONException e) {
+                return "{}";
+            }
+        }
+
+        public void loadCanvasFromJson(String jsonString) {
+            try {
+                JSONObject canvas = new JSONObject(jsonString);
+                
+                // загружаем viewport состояние
+                if (canvas.has("zoom")) {
+                    scaleFactor = (float) canvas.getDouble("zoom");
+                }
+                if (canvas.has("pan_x") && canvas.has("pan_y")) {
+                    float panX = (float) canvas.getDouble("pan_x");
+                    float panY = (float) canvas.getDouble("pan_y");
+                    matrix.setTranslate(panX, panY);
+                    matrix.postScale(scaleFactor, scaleFactor);
+                }
+
+                // загружаем узлы
+                nodes.clear();
+                if (canvas.has("nodes")) {
+                    JSONArray nodesArray = canvas.getJSONArray("nodes");
+                    for (int i = 0; i < nodesArray.length(); i++) {
+                        JSONObject nodeJson = nodesArray.getJSONObject(i);
+                        CanvasNode node = new CanvasNode();
+                        node.type = nodeJson.optString("type", "note");
+                        node.x = (float) nodeJson.optDouble("x", 100);
+                        node.y = (float) nodeJson.optDouble("y", 100);
+                        node.width = (float) nodeJson.optDouble("width", 200);
+                        node.height = (float) nodeJson.optDouble("height", 140);
+                        
+                        // новый формат - простые поля
+                        node.title = nodeJson.optString("title", "");
+                        node.content = nodeJson.optString("content", "");
+                        node.color = nodeJson.optString("color", "#00ffff");
+                        node.noteId = nodeJson.optInt("note_id", 0);
+                        
+                        nodes.add(node);
+                    }
+                }
+
+                // загружаем связи
+                connections.clear();
+                if (canvas.has("connections")) {
+                    JSONArray connectionsArray = canvas.getJSONArray("connections");
+                    for (int i = 0; i < connectionsArray.length(); i++) {
+                        JSONObject connJson = connectionsArray.getJSONObject(i);
+                        int fromIndex = connJson.optInt("from_node_id", -1);
+                        int toIndex = connJson.optInt("to_node_id", -1);
+                        String type = connJson.optString("type", "connection");
+                        
+                        if (fromIndex >= 0 && toIndex >= 0 && 
+                            fromIndex < nodes.size() && toIndex < nodes.size()) {
+                            CanvasConnection connection = new CanvasConnection(
+                                nodes.get(fromIndex), 
+                                nodes.get(toIndex), 
+                                type
+                            );
+                            connections.add(connection);
+                        }
+                    }
+                }
+
+                invalidate();
+            } catch (JSONException e) {
+                // ошибка парсинга - используем демо контент
+                createDemoContent();
+            }
+        }
+
+        public List<CanvasNode> getNodes() {
+            return nodes;
+        }
+
         private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
@@ -635,6 +862,13 @@ public class CanvasActivity extends AppCompatActivity {
                 invalidate();
                 return true;
             }
+        }
+
+        public static class ViewportState {
+            public double zoom = 1.0;
+            public double panX = 0.0;
+            public double panY = 0.0;
+            public String viewState = "{}";
         }
     }
 

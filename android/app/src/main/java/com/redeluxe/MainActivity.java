@@ -18,15 +18,89 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.chip.Chip;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
+
+// модель для canvas
+class CanvasItem {
+    private int id;
+    private String name;
+    private String createdAt;
+    private String updatedAt;
+    
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getCreatedAt() { return createdAt; }
+    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+    public String getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(String updatedAt) { this.updatedAt = updatedAt; }
+}
+
+// модель для графиков
+class GraphItem {
+    private int id;
+    private String name;
+    private String layout;
+    private String createdAt;
+    private String updatedAt;
+    
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getLayout() { return layout; }
+    public void setLayout(String layout) { this.layout = layout; }
+    public String getCreatedAt() { return createdAt; }
+    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+    public String getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(String updatedAt) { this.updatedAt = updatedAt; }
+}
+
+// общий элемент списка
+class ListItem {
+    public static final int TYPE_NOTE = 0;
+    public static final int TYPE_CANVAS = 1;
+    public static final int TYPE_GRAPH = 2;
+    
+    private int type;
+    private Note note;
+    private CanvasItem canvas;
+    private GraphItem graph;
+    
+    public ListItem(Note note) {
+        this.type = TYPE_NOTE;
+        this.note = note;
+    }
+    
+    public ListItem(CanvasItem canvas) {
+        this.type = TYPE_CANVAS;
+        this.canvas = canvas;
+    }
+    
+    public ListItem(GraphItem graph) {
+        this.type = TYPE_GRAPH;
+        this.graph = graph;
+    }
+    
+    public int getType() { return type; }
+    public Note getNote() { return note; }
+    public CanvasItem getCanvas() { return canvas; }
+    public GraphItem getGraph() { return graph; }
+}
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView notesRecyclerView;
     private NotesAdapter notesAdapter;
     private ApiService apiService;
     private List<Note> allNotes = new ArrayList<>();
-    private List<Note> filteredNotes = new ArrayList<>();
+    private List<CanvasItem> allCanvases = new ArrayList<>();
+    private List<GraphItem> allGraphs = new ArrayList<>();
+    private List<ListItem> filteredItems = new ArrayList<>();
     
     private EditText searchInput;
     private TextView notesCountText;
@@ -37,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout fabGraphContainer, fabCanvasContainer, fabDailyContainer, fabTemplateContainer;
     private FloatingActionButton fabGraph, fabCanvas, fabDaily, fabTemplate;
     
-    private Chip chipAll, chipPinned, chipArchived, chipCategories;
+    private Chip chipAll, chipPinned, chipArchived, chipCategories, chipCanvas, chipGraphs;
     private String currentFilter = "all";
     private boolean isFabMenuOpen = false;
 
@@ -51,7 +125,7 @@ public class MainActivity extends AppCompatActivity {
         setupListeners();
 
         apiService = new ApiService(this);
-        loadNotes();
+        loadAllData();
     }
 
     private void initViews() {
@@ -78,10 +152,14 @@ public class MainActivity extends AppCompatActivity {
         chipPinned = findViewById(R.id.chipPinned);
         chipArchived = findViewById(R.id.chipArchived);
         chipCategories = findViewById(R.id.chipCategories);
+        
+        // новые фильтры для canvas и графиков
+        chipCanvas = findViewById(R.id.chipCanvas);
+        chipGraphs = findViewById(R.id.chipGraphs);
     }
 
     private void setupRecyclerView() {
-        notesAdapter = new NotesAdapter(filteredNotes, new NotesAdapter.OnNoteActionListener() {
+        notesAdapter = new NotesAdapter(filteredItems, new NotesAdapter.OnNoteActionListener() {
             @Override
             public void onNoteClick(Note note) {
                 Intent intent = new Intent(MainActivity.this, NoteEditActivity.class);
@@ -111,6 +189,42 @@ public class MainActivity extends AppCompatActivity {
             public void onNoteLongClick(Note note) {
                 showNoteContextMenu(note);
             }
+            
+            @Override
+            public void onCanvasClick(CanvasItem canvas) {
+                Intent intent = new Intent(MainActivity.this, CanvasActivity.class);
+                intent.putExtra("canvas_id", canvas.getId());
+                intent.putExtra("canvas_name", canvas.getName());
+                startActivity(intent);
+            }
+            
+            @Override
+            public void onGraphClick(GraphItem graph) {
+                Intent intent = new Intent(MainActivity.this, GraphActivity.class);
+                intent.putExtra("graph_id", graph.getId());
+                intent.putExtra("graph_name", graph.getName());
+                startActivity(intent);
+            }
+            
+            @Override
+            public void onCanvasDelete(CanvasItem canvas) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Удалить Canvas?")
+                        .setMessage("Вы уверены, что хотите удалить \"" + canvas.getName() + "\"?")
+                        .setPositiveButton("Удалить", (dialog, which) -> deleteCanvas(canvas.getId()))
+                        .setNegativeButton("Отмена", null)
+                        .show();
+            }
+            
+            @Override
+            public void onGraphDelete(GraphItem graph) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Удалить Граф?")
+                        .setMessage("Вы уверены, что хотите удалить \"" + graph.getName() + "\"?")
+                        .setPositiveButton("Удалить", (dialog, which) -> deleteGraph(graph.getId()))
+                        .setNegativeButton("Отмена", null)
+                        .show();
+            }
         });
 
         notesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -130,14 +244,12 @@ public class MainActivity extends AppCompatActivity {
         // FAB menu items
         fabGraph.setOnClickListener(v -> {
             closeFabMenu();
-            Intent intent = new Intent(MainActivity.this, GraphActivity.class);
-            startActivity(intent);
+            showNewGraphDialog();
         });
 
         fabCanvas.setOnClickListener(v -> {
             closeFabMenu();
-            Intent intent = new Intent(MainActivity.this, CanvasActivity.class);
-            startActivity(intent);
+            showNewCanvasDialog();
         });
 
         fabDaily.setOnClickListener(v -> {
@@ -158,6 +270,8 @@ public class MainActivity extends AppCompatActivity {
         chipPinned.setOnClickListener(v -> applyFilter("pinned"));
         chipArchived.setOnClickListener(v -> applyFilter("archived"));
         chipCategories.setOnClickListener(v -> applyFilter("categories"));
+        chipCanvas.setOnClickListener(v -> applyFilter("canvas"));
+        chipGraphs.setOnClickListener(v -> applyFilter("graphs"));
 
         // Search
         searchInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -327,6 +441,78 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
+    private void loadAllData() {
+        loadNotes();
+        loadCanvases();
+        loadGraphs();
+    }
+
+    private void loadCanvases() {
+        apiService.getCanvases(new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    JSONArray canvasesArray = json.getJSONArray("canvases");
+                    
+                    allCanvases.clear();
+                    for (int i = 0; i < canvasesArray.length(); i++) {
+                        JSONObject canvasJson = canvasesArray.getJSONObject(i);
+                        CanvasItem canvas = new CanvasItem();
+                        canvas.setId(canvasJson.getInt("id"));
+                        canvas.setName(canvasJson.getString("name"));
+                        canvas.setCreatedAt(canvasJson.getString("created_at"));
+                        canvas.setUpdatedAt(canvasJson.getString("updated_at"));
+                        allCanvases.add(canvas);
+                    }
+                    
+                    applyFilter(currentFilter);
+                } catch (JSONException e) {
+                    // игнорируем ошибку загрузки canvas
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                // игнорируем ошибку загрузки canvas
+            }
+        });
+    }
+
+    private void loadGraphs() {
+        apiService.getGraphStates(new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    JSONArray statesArray = json.getJSONArray("states");
+                    
+                    allGraphs.clear();
+                    for (int i = 0; i < statesArray.length(); i++) {
+                        JSONObject stateJson = statesArray.getJSONObject(i);
+                        
+                        GraphItem graph = new GraphItem();
+                        graph.setId(stateJson.getInt("id"));
+                        graph.setName(stateJson.getString("name"));
+                        graph.setLayout(stateJson.optString("layout", "force"));
+                        graph.setCreatedAt(stateJson.getString("created_at"));
+                        graph.setUpdatedAt(stateJson.getString("updated_at"));
+                        allGraphs.add(graph);
+                    }
+                    
+                    applyFilter(currentFilter);
+                } catch (JSONException e) {
+                    // игнорируем ошибку загрузки графов
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                // игнорируем ошибку загрузки графов
+            }
+        });
+    }
+
     private void loadNotes() {
         apiService.getNotes(new ApiService.ApiCallback<List<Note>>() {
             @Override
@@ -346,36 +532,54 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateNotesCount() {
-        notesCountText.setText(String.valueOf(filteredNotes.size()));
+        notesCountText.setText(String.valueOf(filteredItems.size()));
     }
 
     private void applyFilter(String filter) {
         currentFilter = filter;
-        filteredNotes.clear();
+        filteredItems.clear();
 
         switch (filter) {
             case "all":
-                filteredNotes.addAll(allNotes);
+                for (Note note : allNotes) {
+                    filteredItems.add(new ListItem(note));
+                }
+                for (CanvasItem canvas : allCanvases) {
+                    filteredItems.add(new ListItem(canvas));
+                }
+                for (GraphItem graph : allGraphs) {
+                    filteredItems.add(new ListItem(graph));
+                }
                 break;
             case "pinned":
                 for (Note note : allNotes) {
                     if (note.isPinned()) {
-                        filteredNotes.add(note);
+                        filteredItems.add(new ListItem(note));
                     }
                 }
                 break;
             case "archived":
                 for (Note note : allNotes) {
                     if (note.isArchived()) {
-                        filteredNotes.add(note);
+                        filteredItems.add(new ListItem(note));
                     }
                 }
                 break;
             case "categories":
                 for (Note note : allNotes) {
                     if (note.getCategory() != null) {
-                        filteredNotes.add(note);
+                        filteredItems.add(new ListItem(note));
                     }
+                }
+                break;
+            case "canvas":
+                for (CanvasItem canvas : allCanvases) {
+                    filteredItems.add(new ListItem(canvas));
+                }
+                break;
+            case "graphs":
+                for (GraphItem graph : allGraphs) {
+                    filteredItems.add(new ListItem(graph));
                 }
                 break;
         }
@@ -389,8 +593,26 @@ public class MainActivity extends AppCompatActivity {
         apiService.searchNotes(query, new ApiService.ApiCallback<List<Note>>() {
             @Override
             public void onSuccess(List<Note> notes) {
-                filteredNotes.clear();
-                filteredNotes.addAll(notes);
+                filteredItems.clear();
+                for (Note note : notes) {
+                    filteredItems.add(new ListItem(note));
+                }
+                
+                // поиск по canvas
+                String lowerQuery = query.toLowerCase();
+                for (CanvasItem canvas : allCanvases) {
+                    if (canvas.getName().toLowerCase().contains(lowerQuery)) {
+                        filteredItems.add(new ListItem(canvas));
+                    }
+                }
+                
+                // поиск по графикам
+                for (GraphItem graph : allGraphs) {
+                    if (graph.getName().toLowerCase().contains(lowerQuery)) {
+                        filteredItems.add(new ListItem(graph));
+                    }
+                }
+                
                 notesAdapter.notifyDataSetChanged();
                 updateEmptyState();
                 updateNotesCount();
@@ -450,7 +672,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateEmptyState() {
-        if (filteredNotes.isEmpty()) {
+        if (filteredItems.isEmpty()) {
             emptyState.setVisibility(View.VISIBLE);
             notesRecyclerView.setVisibility(View.GONE);
         } else {
@@ -462,7 +684,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        loadNotes();
+        loadAllData();
     }
 
     @Override
@@ -533,7 +755,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onSuccess(Note note) {
                         Toast.makeText(MainActivity.this, "заметка из шаблона создана", Toast.LENGTH_SHORT).show();
-                        loadNotes();
+                        loadAllData();
                     }
 
                     @Override
@@ -583,6 +805,138 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onError(String error) {
                 Toast.makeText(MainActivity.this, "ошибка загрузки статистики: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void showNewCanvasDialog() {
+        EditText nameInput = new EditText(this);
+        nameInput.setHint("название canvas");
+        nameInput.setText("новый canvas");
+        nameInput.setTextColor(android.graphics.Color.WHITE);
+        
+        new AlertDialog.Builder(this)
+            .setTitle("создать canvas")
+            .setView(nameInput)
+            .setPositiveButton("создать", (dialog, which) -> {
+                String name = nameInput.getText().toString().trim();
+                if (name.isEmpty()) name = "новый canvas";
+                createNewCanvas(name);
+            })
+            .setNegativeButton("отмена", null)
+            .show();
+    }
+
+    private void showNewGraphDialog() {
+        EditText nameInput = new EditText(this);
+        nameInput.setHint("название графа");
+        nameInput.setText("новый граф");
+        nameInput.setTextColor(android.graphics.Color.WHITE);
+        
+        new AlertDialog.Builder(this)
+            .setTitle("создать граф")
+            .setView(nameInput)
+            .setPositiveButton("создать", (dialog, which) -> {
+                String name = nameInput.getText().toString().trim();
+                if (name.isEmpty()) name = "новый граф";
+                createNewGraph(name);
+            })
+            .setNegativeButton("отмена", null)
+            .show();
+    }
+
+    private void createNewCanvas(String name) {
+        apiService.createCanvas(name, 1920, 1080, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    CanvasItem canvas = new CanvasItem();
+                    canvas.setId(json.getInt("id"));
+                    canvas.setName(json.getString("name"));
+                    canvas.setCreatedAt(json.getString("created_at"));
+                    canvas.setUpdatedAt(json.getString("updated_at"));
+                    
+                    allCanvases.add(canvas);
+                    applyFilter(currentFilter);
+                    
+                    // открываем созданный canvas
+                    Intent intent = new Intent(MainActivity.this, CanvasActivity.class);
+                    intent.putExtra("canvas_id", canvas.getId());
+                    intent.putExtra("canvas_name", canvas.getName());
+                    startActivity(intent);
+                } catch (JSONException e) {
+                    Toast.makeText(MainActivity.this, "ошибка создания canvas", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(MainActivity.this, "ошибка: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void createNewGraph(String name) {
+        apiService.saveGraphState(name, "{}", "force", 1.0, 0.0, 0.0, "", 
+            new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    JSONObject json = new JSONObject(result);
+                    GraphItem graph = new GraphItem();
+                    graph.setId(json.getInt("id"));
+                    graph.setName(json.getString("name"));
+                    graph.setLayout(json.optString("layout", "force"));
+                    graph.setCreatedAt(json.getString("created_at"));
+                    graph.setUpdatedAt(json.getString("updated_at"));
+                    
+                    allGraphs.add(graph);
+                    applyFilter(currentFilter);
+                    
+                    // открываем созданный граф
+                    Intent intent = new Intent(MainActivity.this, GraphActivity.class);
+                    intent.putExtra("graph_id", graph.getId());
+                    intent.putExtra("graph_name", graph.getName());
+                    startActivity(intent);
+                } catch (JSONException e) {
+                    Toast.makeText(MainActivity.this, "ошибка создания графа", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(MainActivity.this, "ошибка: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void deleteCanvas(int canvasId) {
+        apiService.deleteCanvas(canvasId, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                Toast.makeText(MainActivity.this, "Canvas удален", Toast.LENGTH_SHORT).show();
+                loadAllData();
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(MainActivity.this, "Ошибка удаления: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void deleteGraph(int graphId) {
+        apiService.deleteGraphState(graphId, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                Toast.makeText(MainActivity.this, "Граф удален", Toast.LENGTH_SHORT).show();
+                loadAllData();
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(MainActivity.this, "Ошибка удаления: " + error, Toast.LENGTH_SHORT).show();
             }
         });
     }

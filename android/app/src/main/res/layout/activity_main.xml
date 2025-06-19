@@ -125,6 +125,26 @@
                 app:chipBackgroundColor="@color/neon_green"
                 app:chipStrokeColor="@color/neon_green" />
 
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipCanvas"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎨 canvas"
+                android:layout_marginStart="8dp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_orange"
+                app:chipStrokeColor="@color/neon_orange" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGraphs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 графы"
+                android:layout_marginStart="8dp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/neon_cyan"
+                app:chipStrokeColor="@color/neon_cyan" />
+
         </LinearLayout>
 
     </HorizontalScrollView>

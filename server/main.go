@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/datatypes"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -208,32 +209,73 @@ type Link struct {
 }
 
 type Canvas struct {
-	ID        uint         `json:"id" gorm:"primaryKey"`
-	Name      string       `json:"name"`
-	Data      string       `json:"data" gorm:"type:text"` // JSON данные canvas
-	Width     int          `json:"width" gorm:"default:1920"`
-	Height    int          `json:"height" gorm:"default:1080"`
-	UserID    uint         `json:"user_id"`
-	User      User         `json:"user" gorm:"foreignKey:UserID"`
-	Nodes     []CanvasNode `json:"nodes,omitempty" gorm:"foreignKey:CanvasID"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Name      string         `json:"name"`
+	Data      datatypes.JSON `json:"data" gorm:"type:text"` // JSON данные canvas
+	Width     int            `json:"width" gorm:"default:1920"`
+	Height    int            `json:"height" gorm:"default:1080"`
+	Zoom      float64        `json:"zoom" gorm:"default:1.0"`
+	PanX      float64        `json:"pan_x" gorm:"default:0"`
+	PanY      float64        `json:"pan_y" gorm:"default:0"`
+	ViewState string         `json:"view_state" gorm:"type:text"` // состояние viewport
+	UserID    uint           `json:"user_id"`
+	User      User           `json:"user" gorm:"foreignKey:UserID"`
+	Nodes     []CanvasNode   `json:"nodes,omitempty" gorm:"foreignKey:CanvasID"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 type CanvasNode struct {
-	ID       uint   `json:"id" gorm:"primaryKey"`
-	CanvasID uint   `json:"canvas_id"`
-	Canvas   Canvas `json:"canvas" gorm:"foreignKey:CanvasID"`
-	Type     string `json:"type"` // note, text, image, file, group
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
-	Data     string `json:"data" gorm:"type:text"` // JSON данные узла
-	NoteID   *uint  `json:"note_id"`
-	Note     *Note  `json:"note,omitempty" gorm:"foreignKey:NoteID"`
-	UserID   uint   `json:"user_id"`
-	User     User   `json:"user" gorm:"foreignKey:UserID"`
+	ID       uint    `json:"id" gorm:"primaryKey"`
+	CanvasID uint    `json:"canvas_id"`
+	Canvas   Canvas  `json:"-" gorm:"foreignKey:CanvasID"`
+	Type     string  `json:"type"` // note, text, image, file, group
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	Width    float64 `json:"width"`
+	Height   float64 `json:"height"`
+	Rotation float64 `json:"rotation" gorm:"default:0"`
+	Scale    float64 `json:"scale" gorm:"default:1.0"`
+	ZIndex   int     `json:"z_index" gorm:"default:0"`
+	// простые поля для текста вместо JSON
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Color     string    `json:"color"`
+	NoteID    *uint     `json:"note_id"`
+	Note      *Note     `json:"note,omitempty" gorm:"foreignKey:NoteID"`
+	UserID    uint      `json:"user_id"`
+	User      User      `json:"-" gorm:"foreignKey:UserID"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type CanvasConnection struct {
+	ID         uint       `json:"id" gorm:"primaryKey"`
+	CanvasID   uint       `json:"canvas_id"`
+	Canvas     Canvas     `json:"-" gorm:"foreignKey:CanvasID"`
+	FromNodeID uint       `json:"from_node_id"`
+	FromNode   CanvasNode `json:"from_node,omitempty" gorm:"foreignKey:FromNodeID"`
+	ToNodeID   uint       `json:"to_node_id"`
+	ToNode     CanvasNode `json:"to_node,omitempty" gorm:"foreignKey:ToNodeID"`
+	Type       string     `json:"type" gorm:"default:'connection'"`
+	UserID     uint       `json:"user_id"`
+	User       User       `json:"-" gorm:"foreignKey:UserID"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+type GraphState struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name"`
+	Data      string    `json:"data" gorm:"type:text"`         // JSON состояние графа
+	Layout    string    `json:"layout" gorm:"default:'force'"` // force, circular, tree
+	Zoom      float64   `json:"zoom" gorm:"default:1.0"`
+	PanX      float64   `json:"pan_x" gorm:"default:0"`
+	PanY      float64   `json:"pan_y" gorm:"default:0"`
+	Filter    string    `json:"filter" gorm:"type:text"` // фильтры узлов
+	UserID    uint      `json:"user_id"`
+	User      User      `json:"user" gorm:"foreignKey:UserID"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Block struct {
@@ -321,12 +363,15 @@ type GraphData struct {
 
 func initDB() {
 	var err error
-	db, err = gorm.Open(sqlite.Open("redeluxe.db"), &gorm.Config{})
+	db, err = gorm.Open(sqlite.Open("redeluxe.db?_pragma=encoding=UTF-8"), &gorm.Config{})
 	if err != nil {
 		panic("не удалось подключиться к базе данных")
 	}
 
-	db.AutoMigrate(&User{}, &Category{}, &Tag{}, &Note{}, &Template{}, &Reminder{}, &File{}, &NoteHistory{}, &Share{}, &Backup{}, &Link{}, &Canvas{}, &CanvasNode{}, &Block{}, &Workspace{}, &DailyNote{}, &Plugin{}, &Hotkey{})
+	// устанавливаем UTF-8 кодировку для SQLite
+	db.Exec("PRAGMA encoding = 'UTF-8'")
+
+	db.AutoMigrate(&User{}, &Category{}, &Tag{}, &Note{}, &Template{}, &Reminder{}, &File{}, &NoteHistory{}, &Share{}, &Backup{}, &Link{}, &Canvas{}, &CanvasNode{}, &CanvasConnection{}, &GraphState{}, &Block{}, &Workspace{}, &DailyNote{}, &Plugin{}, &Hotkey{})
 }
 
 func generateToken(userID uint, email string) (string, error) {
@@ -1224,7 +1269,17 @@ func getGraph(c *gin.Context) {
 	var categories []Category
 	var tags []Tag
 
-	db.Where("user_id = ?", userID).Preload("Category").Preload("Tags").Find(&notes)
+	// фильтры
+	categoryFilter := c.Query("category")
+	tagFilter := c.Query("tag")
+	typeFilter := c.Query("type") // note, category, tag
+
+	query := db.Where("user_id = ?", userID)
+	if categoryFilter != "" {
+		query = query.Where("category_id = ?", categoryFilter)
+	}
+
+	query.Preload("Category").Preload("Tags").Find(&notes)
 	db.Where("user_id = ?", userID).Preload("FromNote").Preload("ToNote").Find(&links)
 	db.Where("user_id = ?", userID).Find(&categories)
 	db.Where("user_id = ?", userID).Find(&tags)
@@ -1235,41 +1290,49 @@ func getGraph(c *gin.Context) {
 	}
 
 	// добавляем заметки как узлы
-	for _, note := range notes {
-		size := len(note.Content)/10 + 10
-		if size > 50 {
-			size = 50
-		}
+	if typeFilter == "" || typeFilter == "note" {
+		for _, note := range notes {
+			size := len(note.Content)/10 + 10
+			if size > 50 {
+				size = 50
+			}
 
-		graph.Nodes = append(graph.Nodes, GraphNode{
-			ID:    fmt.Sprintf("note_%d", note.ID),
-			Label: note.Title,
-			Type:  "note",
-			Color: note.Color,
-			Size:  size,
-		})
+			graph.Nodes = append(graph.Nodes, GraphNode{
+				ID:    fmt.Sprintf("note_%d", note.ID),
+				Label: note.Title,
+				Type:  "note",
+				Color: note.Color,
+				Size:  size,
+			})
+		}
 	}
 
 	// добавляем категории как узлы
-	for _, cat := range categories {
-		graph.Nodes = append(graph.Nodes, GraphNode{
-			ID:    fmt.Sprintf("cat_%d", cat.ID),
-			Label: cat.Name,
-			Type:  "category",
-			Color: cat.Color,
-			Size:  20,
-		})
+	if typeFilter == "" || typeFilter == "category" {
+		for _, cat := range categories {
+			graph.Nodes = append(graph.Nodes, GraphNode{
+				ID:    fmt.Sprintf("cat_%d", cat.ID),
+				Label: cat.Name,
+				Type:  "category",
+				Color: cat.Color,
+				Size:  20,
+			})
+		}
 	}
 
 	// добавляем теги как узлы
-	for _, tag := range tags {
-		graph.Nodes = append(graph.Nodes, GraphNode{
-			ID:    fmt.Sprintf("tag_%d", tag.ID),
-			Label: tag.Name,
-			Type:  "tag",
-			Color: tag.Color,
-			Size:  15,
-		})
+	if typeFilter == "" || typeFilter == "tag" {
+		for _, tag := range tags {
+			if tagFilter == "" || tag.Name == tagFilter {
+				graph.Nodes = append(graph.Nodes, GraphNode{
+					ID:    fmt.Sprintf("tag_%d", tag.ID),
+					Label: tag.Name,
+					Type:  "tag",
+					Color: tag.Color,
+					Size:  15,
+				})
+			}
+		}
 	}
 
 	// добавляем связи
@@ -1291,6 +1354,20 @@ func getGraph(c *gin.Context) {
 				Type:   "category",
 				Weight: 1,
 			})
+		}
+	}
+
+	// связи заметок с тегами
+	for _, note := range notes {
+		for _, tag := range note.Tags {
+			if tagFilter == "" || tag.Name == tagFilter {
+				graph.Edges = append(graph.Edges, GraphEdge{
+					Source: fmt.Sprintf("note_%d", note.ID),
+					Target: fmt.Sprintf("tag_%d", tag.ID),
+					Type:   "tag",
+					Weight: 1,
+				})
+			}
 		}
 	}
 
@@ -1319,6 +1396,106 @@ func getBacklinks(c *gin.Context) {
 	var links []Link
 	db.Where("user_id = ? AND to_note_id = ?", userID, noteID).Preload("FromNote").Find(&links)
 	c.JSON(http.StatusOK, gin.H{"backlinks": links})
+}
+
+func saveGraphState(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+
+	var graphState GraphState
+	if err := c.ShouldBindJSON(&graphState); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
+		return
+	}
+
+	graphState.UserID = userID
+
+	// ищем существующее состояние для этого пользователя
+	var existing GraphState
+	result := db.Where("user_id = ? AND name = ?", userID, graphState.Name).First(&existing)
+
+	if result.Error == nil {
+		// обновляем существующее
+		existing.Data = graphState.Data
+		existing.Layout = graphState.Layout
+		existing.Zoom = graphState.Zoom
+		existing.PanX = graphState.PanX
+		existing.PanY = graphState.PanY
+		existing.Filter = graphState.Filter
+		db.Save(&existing)
+		c.JSON(http.StatusOK, existing)
+	} else {
+		// создаем новое
+		db.Create(&graphState)
+		c.JSON(http.StatusCreated, graphState)
+	}
+}
+
+func getGraphStates(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+
+	var states []GraphState
+	db.Where("user_id = ?", userID).Order("updated_at desc").Find(&states)
+	c.JSON(http.StatusOK, gin.H{"states": states})
+}
+
+func getGraphState(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	stateID := c.Param("id")
+
+	var state GraphState
+	if err := db.Where("id = ? AND user_id = ?", stateID, userID).First(&state).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "состояние не найдено"})
+		return
+	}
+
+	c.JSON(http.StatusOK, state)
+}
+
+func deleteGraphState(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	stateID := c.Param("id")
+
+	result := db.Where("id = ? AND user_id = ?", stateID, userID).Delete(&GraphState{})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "состояние не найдено"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "состояние удалено"})
+}
+
+func autoSaveCanvasState(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	canvasID := c.Param("id")
+
+	var stateData struct {
+		Zoom      float64 `json:"zoom"`
+		PanX      float64 `json:"pan_x"`
+		PanY      float64 `json:"pan_y"`
+		ViewState string  `json:"view_state"`
+	}
+
+	if err := c.ShouldBindJSON(&stateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
+		return
+	}
+
+	// быстрое обновление только viewport состояния
+	result := db.Model(&Canvas{}).
+		Where("id = ? AND user_id = ?", canvasID, userID).
+		Updates(map[string]interface{}{
+			"zoom":       stateData.Zoom,
+			"pan_x":      stateData.PanX,
+			"pan_y":      stateData.PanY,
+			"view_state": stateData.ViewState,
+		})
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "canvas не найден"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "автосохранение выполнено"})
 }
 
 // canvas - визуальные заметки
@@ -1354,13 +1531,183 @@ func updateCanvas(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&canvas); err != nil {
+	var updateData map[string]interface{}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
 		return
 	}
 
-	db.Save(&canvas)
+	// если передаются узлы, обновляем их отдельно
+	if nodesData, ok := updateData["nodes"]; ok {
+		tx := db.Begin()
+		if err := tx.Where("canvas_id = ?", canvasID).Delete(&CanvasNode{}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка удаления старых узлов"})
+			return
+		}
+
+		nodesJSON, _ := json.Marshal(nodesData)
+		var nodes []CanvasNode
+		json.Unmarshal(nodesJSON, &nodes)
+
+		for _, node := range nodes {
+			node.CanvasID = canvas.ID
+			node.UserID = userID
+			if err := tx.Create(&node).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка сохранения узла"})
+				return
+			}
+		}
+		tx.Commit()
+		delete(updateData, "nodes") // удаляем узлы из основного обновления
+	}
+
+	db.Model(&canvas).Updates(updateData)
 	c.JSON(http.StatusOK, canvas)
+}
+
+func saveCanvasState(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	canvasID := c.Param("id")
+
+	var canvas Canvas
+	if err := db.Where("id = ? AND user_id = ?", canvasID, userID).First(&canvas).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "canvas не найден"})
+		return
+	}
+
+	var stateData struct {
+		Zoom        float64            `json:"zoom"`
+		PanX        float64            `json:"pan_x"`
+		PanY        float64            `json:"pan_y"`
+		ViewState   string             `json:"view_state"`
+		Data        string             `json:"data"`
+		Nodes       []CanvasNode       `json:"nodes"`
+		Connections []CanvasConnection `json:"connections"`
+	}
+
+	if err := c.ShouldBindJSON(&stateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
+		return
+	}
+
+	// начинаем транзакцию
+	tx := db.Begin()
+
+	// обновляем canvas
+	canvas.Zoom = stateData.Zoom
+	canvas.PanX = stateData.PanX
+	canvas.PanY = stateData.PanY
+	canvas.ViewState = stateData.ViewState
+	if stateData.Data != "" {
+		canvas.Data = datatypes.JSON(stateData.Data)
+	}
+	if err := tx.Save(&canvas).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка сохранения canvas"})
+		return
+	}
+
+	// удаляем старые узлы и связи
+	if err := tx.Where("canvas_id = ?", canvasID).Delete(&CanvasNode{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка удаления старых узлов"})
+		return
+	}
+	if err := tx.Where("canvas_id = ?", canvasID).Delete(&CanvasConnection{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка удаления старых связей"})
+		return
+	}
+
+	// сохраняем узлы
+	nodeIdMap := make(map[string]uint) // для связей
+	if len(stateData.Nodes) > 0 {
+		for i, node := range stateData.Nodes {
+			node.CanvasID = canvas.ID
+			node.UserID = userID
+			if err := tx.Create(&node).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка сохранения узла"})
+				return
+			}
+			// сохраняем соответствие старый индекс -> новый ID
+			nodeIdMap[fmt.Sprintf("%d", i)] = node.ID
+		}
+	}
+
+	// сохраняем связи
+	if len(stateData.Connections) > 0 {
+		for _, conn := range stateData.Connections {
+			conn.CanvasID = canvas.ID
+			conn.UserID = userID
+			if err := tx.Create(&conn).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка сохранения связи"})
+				return
+			}
+		}
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{"message": "состояние сохранено"})
+}
+
+func createCanvasNode(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	canvasID := c.Param("id")
+
+	var node CanvasNode
+	if err := c.ShouldBindJSON(&node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
+		return
+	}
+
+	// проверяем что canvas принадлежит пользователю
+	var canvas Canvas
+	if err := db.Where("id = ? AND user_id = ?", canvasID, userID).First(&canvas).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "canvas не найден"})
+		return
+	}
+
+	node.CanvasID = canvas.ID
+	node.UserID = userID
+	db.Create(&node)
+	c.JSON(http.StatusCreated, node)
+}
+
+func updateCanvasNode(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	nodeID := c.Param("nodeId")
+
+	var node CanvasNode
+	if err := db.Where("id = ? AND user_id = ?", nodeID, userID).First(&node).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "узел не найден"})
+		return
+	}
+
+	var updateData map[string]interface{}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "неверные данные"})
+		return
+	}
+
+	db.Model(&node).Updates(updateData)
+	c.JSON(http.StatusOK, node)
+}
+
+func deleteCanvasNode(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	nodeID := c.Param("nodeId")
+
+	result := db.Where("id = ? AND user_id = ?", nodeID, userID).Delete(&CanvasNode{})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "узел не найден"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "узел удален"})
 }
 
 func getCanvas(c *gin.Context) {
@@ -1373,7 +1720,45 @@ func getCanvas(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, canvas)
+	// загружаем связи
+	var connections []CanvasConnection
+	db.Where("canvas_id = ?", canvasID).Preload("FromNode").Preload("ToNode").Find(&connections)
+
+	// формируем ответ с узлами и связями
+	response := map[string]interface{}{
+		"id":          canvas.ID,
+		"name":        canvas.Name,
+		"data":        canvas.Data,
+		"width":       canvas.Width,
+		"height":      canvas.Height,
+		"zoom":        canvas.Zoom,
+		"pan_x":       canvas.PanX,
+		"pan_y":       canvas.PanY,
+		"view_state":  canvas.ViewState,
+		"nodes":       canvas.Nodes,
+		"connections": connections,
+		"created_at":  canvas.CreatedAt,
+		"updated_at":  canvas.UpdatedAt,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func deleteCanvas(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	canvasID := c.Param("id")
+
+	// удаляем все узлы canvas
+	db.Where("canvas_id = ? AND user_id = ?", canvasID, userID).Delete(&CanvasNode{})
+
+	// удаляем сам canvas
+	result := db.Where("id = ? AND user_id = ?", canvasID, userID).Delete(&Canvas{})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "canvas не найден"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "canvas удален"})
 }
 
 // ежедневные заметки
@@ -1586,6 +1971,12 @@ func main() {
 
 	r := gin.Default()
 
+	// middleware для UTF-8
+	r.Use(func(c *gin.Context) {
+		c.Header("Content-Type", "application/json; charset=utf-8")
+		c.Next()
+	})
+
 	// cors для мобильного приложения
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -1662,6 +2053,10 @@ func main() {
 
 		// graph view - граф связей
 		api.GET("/graph", getGraph)
+		api.POST("/graph/save-state", saveGraphState)
+		api.GET("/graph/states", getGraphStates)
+		api.GET("/graph/states/:id", getGraphState)
+		api.DELETE("/graph/states/:id", deleteGraphState)
 
 		// связи между заметками
 		api.POST("/links", createLink)
@@ -1672,6 +2067,12 @@ func main() {
 		api.POST("/canvases", createCanvas)
 		api.PUT("/canvases/:id", updateCanvas)
 		api.GET("/canvases/:id", getCanvas)
+		api.DELETE("/canvases/:id", deleteCanvas)
+		api.POST("/canvases/:id/save-state", saveCanvasState)
+		api.POST("/canvases/:id/autosave", autoSaveCanvasState)
+		api.POST("/canvases/:id/nodes", createCanvasNode)
+		api.PUT("/canvases/:id/nodes/:nodeId", updateCanvasNode)
+		api.DELETE("/canvases/:id/nodes/:nodeId", deleteCanvasNode)
 
 		// ежедневные заметки
 		api.GET("/daily-note", getDailyNote)

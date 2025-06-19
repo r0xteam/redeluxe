@@ -28,6 +28,7 @@
 
         <!-- Title -->
         <TextView
+            android:id="@+id/graphTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -37,15 +38,24 @@
             android:textStyle="bold"
             android:layout_marginStart="16dp" />
 
-        <!-- Add Node -->
+        <!-- Save Button -->
         <ImageButton
-            android:id="@+id/settingsButton"
+            android:id="@+id/saveGraphButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_add"
-            android:tint="@color/neon_green"
-            android:contentDescription="добавить узел"
+            android:src="@drawable/ic_save"
+            android:contentDescription="сохранить граф"
+            android:padding="8dp" />
+
+        <!-- Menu Button -->
+        <ImageButton
+            android:id="@+id/menuButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="меню"
             android:padding="8dp" />
 
     </LinearLayout>

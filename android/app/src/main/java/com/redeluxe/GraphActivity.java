@@ -18,33 +18,106 @@ import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
+import android.content.Intent;
+import android.widget.TextView;
 
 public class GraphActivity extends AppCompatActivity {
     private GraphView graphView;
     private ApiService apiService;
+    private String currentLayout = "force";
+    private String currentFilter = "";
+    private int currentGraphId;
+    private String currentGraphName = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_graph);
 
-        graphView = findViewById(R.id.graphView);
         apiService = new ApiService(this);
-        
+        graphView = findViewById(R.id.graphView);
+
         setupButtons();
-        loadGraph();
+
+        Intent intent = getIntent();
+        currentGraphId = intent.getIntExtra("graph_id", 0);
+        String graphName = intent.getStringExtra("graph_name");
+        currentGraphName = graphName;
+        
+        TextView title = findViewById(R.id.graphTitle);
+        if (graphName != null && !graphName.isEmpty()) {
+            title.setText(graphName);
+        }
+
+        if (currentGraphId > 0) {
+            loadGraphState(currentGraphId);
+        } else {
+            loadGraph(); // load default graph
+        }
     }
 
     private void setupButtons() {
         findViewById(R.id.backButton).setOnClickListener(v -> finish());
-        findViewById(R.id.settingsButton).setOnClickListener(v -> showAddNodeDialog());
         findViewById(R.id.zoomInButton).setOnClickListener(v -> graphView.zoomIn());
         findViewById(R.id.zoomOutButton).setOnClickListener(v -> graphView.zoomOut());
         findViewById(R.id.centerButton).setOnClickListener(v -> graphView.centerGraph());
+        findViewById(R.id.saveGraphButton).setOnClickListener(v -> saveGraphState());
+        findViewById(R.id.menuButton).setOnClickListener(this::showGraphMenu);
+    }
+
+    private void showGraphMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        popup.getMenu().add("Добавить узел").setOnMenuItemClickListener(item -> {
+            showAddNodeDialog();
+            return true;
+        });
+        popup.getMenu().add("Изменить лейаут").setOnMenuItemClickListener(item -> {
+            showLayoutOptions();
+            return true;
+        });
+        popup.getMenu().add("Фильтры").setOnMenuItemClickListener(item -> {
+            showFilterOptions();
+            return true;
+        });
+        popup.getMenu().add("Настройки графа").setOnMenuItemClickListener(item -> {
+            showSettings();
+            return true;
+        });
+        popup.show();
+    }
+
+    private void showLayoutOptions() {
+        String[] layouts = {"force", "circular", "tree", "grid"};
+        new AlertDialog.Builder(this)
+                .setTitle("выбрать лейаут")
+                .setItems(layouts, (dialog, which) -> {
+                    currentLayout = layouts[which];
+                    graphView.setLayout(currentLayout);
+                })
+                .show();
+    }
+
+    private void showFilterOptions() {
+        String[] filters = {"", "type=note", "type=category", "type=tag"};
+        String[] filterNames = {"все", "только заметки", "только категории", "только теги"};
+        
+        new AlertDialog.Builder(this)
+            .setTitle("фильтры")
+            .setItems(filterNames, (dialog, which) -> {
+                currentFilter = filters[which];
+                loadGraph();
+                Toast.makeText(this, "фильтр применен", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("отмена", null)
+            .show();
     }
     
     private void showAddNodeDialog() {
@@ -81,8 +154,109 @@ public class GraphActivity extends AppCompatActivity {
     }
 
     private void loadGraph() {
-        graphView.createDemoGraph();
-        Toast.makeText(this, "граф заметок загружен", Toast.LENGTH_SHORT).show();
+        apiService.getGraph(currentFilter, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    graphView.loadGraphFromJson(result);
+                    Toast.makeText(GraphActivity.this, "граф загружен", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    // если ошибка загрузки, используем демо граф
+                    graphView.createDemoGraph();
+                    Toast.makeText(GraphActivity.this, "демо граф загружен", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                graphView.createDemoGraph();
+                Toast.makeText(GraphActivity.this, "демо граф загружен", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void saveGraphState() {
+        if (graphView == null) return;
+
+        if (currentGraphId > 0 && currentGraphName != null && !currentGraphName.isEmpty()) {
+            // если граф был загружен, обновляем его состояние без диалога
+            GraphView.ViewportState state = graphView.getViewportState();
+            String graphData = graphView.getGraphDataAsJson();
+            
+            apiService.saveGraphState(currentGraphName, graphData, currentLayout, 
+                state.zoom, state.panX, state.panY, currentFilter, 
+                new ApiService.ApiCallback<String>() {
+                @Override
+                public void onSuccess(String result) {
+                    Toast.makeText(GraphActivity.this, "состояние '" + currentGraphName + "' обновлено", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onError(String error) {
+                    Toast.makeText(GraphActivity.this, "ошибка обновления: " + error, Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            // если это новый граф, запрашиваем имя
+            EditText nameInput = new EditText(this);
+            nameInput.setHint("название состояния графа");
+            nameInput.setTextColor(Color.WHITE);
+            
+            new AlertDialog.Builder(this)
+                .setTitle("сохранить новое состояние графа")
+                .setView(nameInput)
+                .setPositiveButton("сохранить", (dialog, which) -> {
+                    String name = nameInput.getText().toString().trim();
+                    if (name.isEmpty()) name = "граф_" + System.currentTimeMillis();
+                    
+                    GraphView.ViewportState state = graphView.getViewportState();
+                    String graphData = graphView.getGraphDataAsJson();
+                    
+                    final String finalName = name;
+                    apiService.saveGraphState(finalName, graphData, currentLayout, 
+                        state.zoom, state.panX, state.panY, currentFilter, 
+                        new ApiService.ApiCallback<String>() {
+                        @Override
+                        public void onSuccess(String result) {
+                            Toast.makeText(GraphActivity.this, "состояние '" + finalName + "' сохранено", Toast.LENGTH_SHORT).show();
+                            try {
+                                JSONObject json = new JSONObject(result);
+                                currentGraphId = json.getInt("id");
+                                currentGraphName = json.getString("name");
+                                ((TextView) findViewById(R.id.graphTitle)).setText(currentGraphName);
+                            } catch (JSONException e) {
+                                //
+                            }
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Toast.makeText(GraphActivity.this, "ошибка сохранения: " + error, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                })
+                .setNegativeButton("отмена", null)
+                .show();
+        }
+    }
+
+    private void loadGraphState(int stateId) {
+        apiService.getGraphState(stateId, new ApiService.ApiCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                try {
+                    graphView.loadGraphStateFromJson(result);
+                    Toast.makeText(GraphActivity.this, "состояние загружено", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(GraphActivity.this, "ошибка загрузки состояния", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(GraphActivity.this, "ошибка: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     public static class GraphView extends View {
@@ -712,6 +886,252 @@ public class GraphActivity extends AppCompatActivity {
                 .show();
         }
 
+        public ViewportState getViewportState() {
+            ViewportState state = new ViewportState();
+            state.zoom = scaleFactor;
+            float[] values = new float[9];
+            matrix.getValues(values);
+            state.panX = values[Matrix.MTRANS_X];
+            state.panY = values[Matrix.MTRANS_Y];
+            return state;
+        }
+
+        public String getGraphDataAsJson() {
+            try {
+                JSONObject data = new JSONObject();
+                
+                // nodes
+                JSONArray nodesArray = new JSONArray();
+                for (GraphNode node : nodes) {
+                    JSONObject nodeJson = new JSONObject();
+                    nodeJson.put("id", node.id);
+                    nodeJson.put("label", node.label);
+                    nodeJson.put("type", node.type);
+                    nodeJson.put("color", node.color);
+                    nodeJson.put("size", node.size);
+                    nodeJson.put("x", node.x);
+                    nodeJson.put("y", node.y);
+                    nodesArray.put(nodeJson);
+                }
+                data.put("nodes", nodesArray);
+                
+                // edges
+                JSONArray edgesArray = new JSONArray();
+                for (GraphEdge edge : edges) {
+                    JSONObject edgeJson = new JSONObject();
+                    edgeJson.put("source", edge.source.id);
+                    edgeJson.put("target", edge.target.id);
+                    edgeJson.put("type", edge.type);
+                    edgeJson.put("weight", edge.weight);
+                    edgesArray.put(edgeJson);
+                }
+                data.put("edges", edgesArray);
+                
+                return data.toString();
+            } catch (JSONException e) {
+                return "{}";
+            }
+        }
+
+        public void loadGraphFromJson(String jsonString) {
+            try {
+                JSONObject response = new JSONObject(jsonString);
+                
+                nodes.clear();
+                edges.clear();
+                
+                // parse graph data from server response
+                if (response.has("nodes")) {
+                    JSONArray nodesArray = response.getJSONArray("nodes");
+                    for (int i = 0; i < nodesArray.length(); i++) {
+                        JSONObject nodeJson = nodesArray.getJSONObject(i);
+                        GraphNode node = new GraphNode();
+                        node.id = nodeJson.getString("id");
+                        node.label = nodeJson.getString("label");
+                        node.type = nodeJson.getString("type");
+                        node.color = nodeJson.getString("color");
+                        node.size = nodeJson.getInt("size");
+                        node.x = (float) nodeJson.optDouble("x", Math.random() * 600 + 100);
+                        node.y = (float) nodeJson.optDouble("y", Math.random() * 400 + 100);
+                        nodes.add(node);
+                    }
+                }
+                
+                if (response.has("edges")) {
+                    JSONArray edgesArray = response.getJSONArray("edges");
+                    for (int i = 0; i < edgesArray.length(); i++) {
+                        JSONObject edgeJson = edgesArray.getJSONObject(i);
+                        String sourceId = edgeJson.getString("source");
+                        String targetId = edgeJson.getString("target");
+                        
+                        GraphNode source = findNodeById(sourceId);
+                        GraphNode target = findNodeById(targetId);
+                        
+                        if (source != null && target != null) {
+                            edges.add(new GraphEdge(source, target, 
+                                edgeJson.getString("type"), edgeJson.getInt("weight")));
+                        }
+                    }
+                }
+                
+                invalidate();
+            } catch (JSONException e) {
+                createDemoGraph();
+            }
+        }
+
+        public void loadGraphStateFromJson(String jsonString) {
+            try {
+                JSONObject state = new JSONObject(jsonString);
+                
+                // load viewport state
+                if (state.has("zoom")) {
+                    scaleFactor = (float) state.getDouble("zoom");
+                }
+                if (state.has("pan_x") && state.has("pan_y")) {
+                    float panX = (float) state.getDouble("pan_x");
+                    float panY = (float) state.getDouble("pan_y");
+                    matrix.setTranslate(panX, panY);
+                    matrix.postScale(scaleFactor, scaleFactor);
+                }
+                
+                // load graph data
+                if (state.has("data")) {
+                    String graphData = state.getString("data");
+                    loadGraphDataFromJson(graphData);
+                }
+                
+                invalidate();
+            } catch (JSONException e) {
+                // ошибка загрузки состояния
+            }
+        }
+
+        private void loadGraphDataFromJson(String jsonString) {
+            try {
+                JSONObject data = new JSONObject(jsonString);
+                
+                nodes.clear();
+                edges.clear();
+                
+                if (data.has("nodes")) {
+                    JSONArray nodesArray = data.getJSONArray("nodes");
+                    for (int i = 0; i < nodesArray.length(); i++) {
+                        JSONObject nodeJson = nodesArray.getJSONObject(i);
+                        GraphNode node = new GraphNode();
+                        node.id = nodeJson.getString("id");
+                        node.label = nodeJson.getString("label");
+                        node.type = nodeJson.getString("type");
+                        node.color = nodeJson.getString("color");
+                        node.size = nodeJson.getInt("size");
+                        node.x = (float) nodeJson.getDouble("x");
+                        node.y = (float) nodeJson.getDouble("y");
+                        nodes.add(node);
+                    }
+                }
+                
+                if (data.has("edges")) {
+                    JSONArray edgesArray = data.getJSONArray("edges");
+                    for (int i = 0; i < edgesArray.length(); i++) {
+                        JSONObject edgeJson = edgesArray.getJSONObject(i);
+                        String sourceId = edgeJson.getString("source");
+                        String targetId = edgeJson.getString("target");
+                        
+                        GraphNode source = findNodeById(sourceId);
+                        GraphNode target = findNodeById(targetId);
+                        
+                        if (source != null && target != null) {
+                            edges.add(new GraphEdge(source, target, 
+                                edgeJson.getString("type"), edgeJson.getInt("weight")));
+                        }
+                    }
+                }
+            } catch (JSONException e) {
+                // ошибка парсинга
+            }
+        }
+
+        private GraphNode findNodeById(String id) {
+            for (GraphNode node : nodes) {
+                if (node.id.equals(id)) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        public void setLayout(String layout) {
+            // todo: implement different layout algorithms
+            switch (layout) {
+                case "circular":
+                    arrangeCircular();
+                    break;
+                case "tree":
+                    arrangeTree();
+                    break;
+                case "grid":
+                    arrangeGrid();
+                    break;
+                default:
+                    // force layout - уже работает через физику
+                    break;
+            }
+            invalidate();
+        }
+
+        private void arrangeCircular() {
+            float centerX = getWidth() / 2f;
+            float centerY = getHeight() / 2f;
+            float radius = Math.min(centerX, centerY) * 0.8f;
+            
+            for (int i = 0; i < nodes.size(); i++) {
+                float angle = (float) (2 * Math.PI * i / nodes.size());
+                GraphNode node = nodes.get(i);
+                node.x = centerX + radius * (float) Math.cos(angle);
+                node.y = centerY + radius * (float) Math.sin(angle);
+                node.vx = 0;
+                node.vy = 0;
+            }
+        }
+
+        private void arrangeTree() {
+            // простое древовидное расположение
+            float startY = 100;
+            float levelHeight = 150;
+            int currentLevel = 0;
+            int nodesPerLevel = (int) Math.ceil(Math.sqrt(nodes.size()));
+            
+            for (int i = 0; i < nodes.size(); i++) {
+                GraphNode node = nodes.get(i);
+                int level = i / nodesPerLevel;
+                int position = i % nodesPerLevel;
+                
+                node.x = 100 + position * (getWidth() - 200) / Math.max(1, nodesPerLevel - 1);
+                node.y = startY + level * levelHeight;
+                node.vx = 0;
+                node.vy = 0;
+            }
+        }
+
+        private void arrangeGrid() {
+            int cols = (int) Math.ceil(Math.sqrt(nodes.size()));
+            int rows = (int) Math.ceil((double) nodes.size() / cols);
+            
+            float cellWidth = (getWidth() - 200) / Math.max(1, cols - 1);
+            float cellHeight = (getHeight() - 200) / Math.max(1, rows - 1);
+            
+            for (int i = 0; i < nodes.size(); i++) {
+                GraphNode node = nodes.get(i);
+                int row = i / cols;
+                int col = i % cols;
+                
+                node.x = 100 + col * cellWidth;
+                node.y = 100 + row * cellHeight;
+                node.vx = 0;
+                node.vy = 0;
+            }
+        }
+
         private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
@@ -721,6 +1141,12 @@ public class GraphActivity extends AppCompatActivity {
                 invalidate();
                 return true;
             }
+        }
+
+        public static class ViewportState {
+            public double zoom = 1.0;
+            public double panX = 0.0;
+            public double panY = 0.0;
         }
     }
 
